@@ -6,6 +6,8 @@
     <license>Apache 2.0</license>
     <author>Dick van den Brink</author>
     <keywords>cordova,indexeddb</keywords>
+    <repo>https://github.com/DickvdBrink/cordova-indexeddb.git</repo>
+    <issue>https://github.com/DickvdBrink/cordova-indexeddb/issues</issue>
 
     <engines>
         <engine name="cordova-android" version=">=3.2.0" />
