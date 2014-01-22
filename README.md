@@ -15,3 +15,8 @@ See the docs for more info: http://cordova.apache.org/docs/en/edge/cordova_event
 # Status
 
 Still a work in progress, doesn't work yet!
+
+# Supported platforms
+
+* iOS 6+
+* Android 2.x+
