@@ -11,7 +11,7 @@
 
     <engines>
         <engine name="cordova-android" version=">=3.2.0" />
-        <engine name="cordova-ios" version=">=3.2.0" />
+        <engine name="cordova-ios" version=">=3.0.0" />
     </engines>
 
     <js-module src="www/IndexedDBShim.js" name="indexeddb">
