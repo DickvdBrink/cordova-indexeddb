@@ -743,9 +743,24 @@ var cleanInterface = false;
         idbModules.Sca.encode(valueToUpdate, function(encoded) {
             me.__idbObjectStore.transaction.__pushToQueue(request, function(tx, args, success, error){
                 me.__find(undefined, tx, function(key, value, primaryKey){
-                    var sql = "UPDATE " + idbModules.util.quote(me.__idbObjectStore.name) + " SET value = ? WHERE key = ?";
+                    var store = me.__idbObjectStore,
+                        storeProperties = me.__idbObjectStore.transaction.db.__storeProperties;
+                    var params = [encoded];
+                    var sql = "UPDATE " + idbModules.util.quote(store.name) + " SET value = ?";
+                    var indexList = storeProperties[store.name] && storeProperties[store.name].indexList;
+                    // Also correct the indexes in the table
+                    if (indexList) {
+                        for (var index in indexList) {
+                            var indexProps = indexList[index];
+                            sql += ", " + index + " = ?";
+                            params.push(idbModules.Key.encode(valueToUpdate[indexProps.keyPath]));
+                        }
+                    }
+                    sql += " WHERE key = ?";
+                    params.push(idbModules.Key.encode(primaryKey));
+
                     idbModules.DEBUG && console.log(sql, encoded, key, primaryKey);
-                    tx.executeSql(sql, [encoded, idbModules.Key.encode(primaryKey)], function(tx, data){
+                    tx.executeSql(sql, params, function(tx, data){
                         me.__prefetchedData = null;
                         if (data.rowsAffected === 1) {
                             success(key);
@@ -800,10 +815,10 @@ var cleanInterface = false;
     function IDBIndex(indexName, idbObjectStore){
         this.indexName = this.name = indexName;
         this.__idbObjectStore = this.objectStore = this.source = idbObjectStore;
-        
-        var indexList = idbObjectStore.__storeProps && idbObjectStore.__storeProps.indexList;
-        indexList && (indexList = JSON.parse(indexList));
-        
+
+        var storeProps = idbObjectStore.transaction.db.__storeProperties[idbObjectStore.name];
+        var indexList = storeProps && storeProps.indexList;
+
         this.keyPath = ((indexList && indexList[indexName] && indexList[indexName].keyPath) || indexName);
         ['multiEntry','unique'].forEach(function(prop){
             this[prop] = !!indexList && !!indexList[indexName] && !!indexList[indexName].optionalParams && !!indexList[indexName].optionalParams[prop];
@@ -940,6 +955,15 @@ var cleanInterface = false;
         this.__ready = {};
         this.__setReadyState("createObjectStore", typeof ready === "undefined" ? true : ready);
         this.indexNames = new idbModules.util.StringList();
+        var dbProps = idbTransaction.db.__storeProperties;
+        if (dbProps[name] && dbProps[name].indexList) {
+            var indexes = dbProps[name].indexList;
+            for (var indexName in indexes) {
+                if(indexes.hasOwnProperty(indexName)) {
+                    this.indexNames.push(indexName);
+                }
+            }
+        }
     };
     
     /**
@@ -1249,6 +1273,13 @@ var cleanInterface = false;
             result.__createIndex(indexName, keyPath, optionalParameters);
         }, "createObjectStore");
         me.indexNames.push(indexName);
+
+        // Also update the db indexList, because after reopening the store, we still want to know this indexName
+        var storeProps = me.transaction.db.__storeProperties[me.name];
+        storeProps.indexList[indexName] = {
+            keyPath: keyPath,
+            optionalParams: optionalParameters
+        };
         return result;
     };
     
@@ -1428,10 +1459,19 @@ var cleanInterface = false;
     var IDBDatabase = function(db, name, version, storeProperties){
         this.__db = db;
         this.version = version;
-        this.__storeProperties = storeProperties;
         this.objectStoreNames = new idbModules.util.StringList();
         for (var i = 0; i < storeProperties.rows.length; i++) {
             this.objectStoreNames.push(storeProperties.rows.item(i).name);
+        }
+        // Convert store properties to an object because we need to modify the object when a db is upgraded and new
+        // stores/indexes are being created
+        this.__storeProperties = {};
+        for (i = 0; i < storeProperties.rows.length; i++) {
+            var row = storeProperties.rows.item(i);
+            var objectStoreProps = this.__storeProperties[row.name] = {};
+            objectStoreProps.keyPath = row.keypath;
+            objectStoreProps.autoInc = row.autoInc === "true";
+            objectStoreProps.indexList = JSON.parse(row.indexList);
         }
         this.name = name;
         this.onabort = this.onerror = this.onversionchange = null;
@@ -1466,6 +1506,11 @@ var cleanInterface = false;
         // The IndexedDB Specification needs us to return an Object Store immediatly, but WebSQL does not create and return the store immediatly
         // Hence, this can technically be unusable, and we hack around it, by setting the ready value to false
         me.objectStoreNames.push(storeName);
+        // Also store this for the first run
+        var storeProps = me.__storeProperties[storeName] = {};
+        storeProps.keyPath = createOptions.keyPath;
+        storeProps.autoInc = !!createOptions.autoIncrement;
+        storeProps.indexList = {};
         return result;
     };
     
