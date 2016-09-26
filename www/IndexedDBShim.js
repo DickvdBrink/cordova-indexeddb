@@ -1069,7 +1069,7 @@ var cleanInterface = false;
                 }
                 if (value) {
                     try {
-                        var primaryKey = eval("value['" + props.keyPath + "']");
+                        var primaryKey = eval("value." + props.keyPath);
                         if (primaryKey === undefined) {
                             if (props.autoInc === "true") {
                                 getNextAutoIncKey();
